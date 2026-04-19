@@ -74,18 +74,20 @@ class InventoryGymEnv:
         self.recent_demand = realized_demand
         self.total_demand_seen += realized_demand
 
-        # Satisfy demand
+        # Satisfy demand under canonical Lost Sales dynamics
         if self.on_hand >= realized_demand:
             self.total_demand_satisfied += realized_demand
+            self.on_hand -= realized_demand
+            lost_sales = 0
         else:
             self.total_demand_satisfied += max(0, self.on_hand)
+            lost_sales = realized_demand - max(0, self.on_hand)
+            self.on_hand = 0
             self.stockout_events += 1
 
-        self.on_hand -= realized_demand
-
         # 4. Asymmetric Economic Cost Function
-        holding_cost = self.config.holding_cost_per_unit_day * max(0, self.on_hand)
-        stockout_penalty = self.config.stockout_penalty_per_unit * max(0, -self.on_hand)
+        holding_cost = self.config.holding_cost_per_unit_day * self.on_hand
+        stockout_penalty = self.config.stockout_penalty_per_unit * lost_sales
         order_cost = (self.config.fixed_order_cost if action > 0 else 0.0) + (self.config.unit_purchase_cost * action)
 
         day_cost = holding_cost + stockout_penalty + order_cost
@@ -104,7 +106,7 @@ class InventoryGymEnv:
             "action": action,
             "day_cost": round(day_cost, 2),
             "fill_rate_pct": round(fill_rate, 1),
-            "stockout": self.on_hand < 0,
+            "stockout": lost_sales > 0,
         }
 
         return StepResult(next_state=self._get_state(), reward=reward, done=done, info=info)

@@ -63,15 +63,15 @@ def evaluate_policy(
         res = env.step(action)
         state = res.next_state
 
-        # Decompose costs
-        h_cost = config.holding_cost_per_unit_day * max(0, env.on_hand)
-        p_cost = config.stockout_penalty_per_unit * max(0, -env.on_hand)
+        # Decompose costs based on step dynamics
         o_cost = (config.fixed_order_cost if action > 0 else 0.0) + (config.unit_purchase_cost * action)
+        h_cost = config.holding_cost_per_unit_day * env.on_hand
+        p_cost = max(0.0, res.info["day_cost"] - (h_cost + o_cost))
 
         total_holding += h_cost
         total_stockout += p_cost
         total_ordering += o_cost
-        if env.on_hand < 0:
+        if res.info["stockout"]:
             stockout_count += 1
 
     total_cost = total_holding + total_stockout + total_ordering
